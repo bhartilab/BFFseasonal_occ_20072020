@@ -13,6 +13,7 @@ library(lme4) #glmer
 df<- read.csv("megadf_onezero_formodel_20231221.csv", stringsAsFactors = F)
 
 t<- df[is.na(df$prop_typclwint),]
+#separate out northern and southern roosts, lets focus on southern roosts now 
 
 
 winter_df<- subset(df, season == "winter" )
@@ -55,7 +56,6 @@ var_inv <- ginv(c)
 
 colnames(var_inv) <- colnames(wint) 
 rownames(var_inv) <- colnames(wint)
-#png(height=2000, width=2500, pointsize=22, file="corrplot_c_lower_hclust_insignif3.png")
 corrplot(c, method="circle", type = "lower", order="hclust", tl.col = "black", tl.cex = 0.45, cl.cex = 0.45  )
 corrplot(c)
 dev.off()
@@ -82,7 +82,7 @@ df<- as.matrix(df)
 
 
 
-########## optimize lambda - the shrinkage factor for variable selection ##########
+################### optimize lambda 
 #set lambdas... go from 0 to 10^5, in 10 log steps
 lambda <- 10^seq(-3,5, length=10)
 
@@ -97,86 +97,6 @@ Coeff_ma<-NULL
 library(glmmLasso)
 family = gaussian(link = "logit")
 
-j<-1
-for (j in 1:length(BIC_vec)){
-  print(paste("Iteration ", j, sep=""))
-  
-  glm1w <- try( 
-    glmmLasso(bff.presence ~   
-              + morI_atypclwint:mean_prcp_3mo_w +  morI_atypclwint:mean_tmax_3mo_w   +  morI_atypclwint:mean_tmin_3mo_w
-              + morI_typclwint:mean_prcp_3mo_w +  morI_typclwint:mean_tmax_3mo_w   +  morI_typclwint:mean_tmin_3mo_w
-
-              ######  LAGGED  PRECIP 
-              + morI_typclwint:prcp3mow_lag3mo
-              + morI_typclwint:prcp3mow_lag6mo
-              + morI_typclwint:prcp3mow_lag9mo
-              + morI_typclwint:prcp3mow_lag12mo
-            
-              + morI_atypclwint:prcp3mow_lag3mo
-              + morI_atypclwint:prcp3mow_lag6mo
-              + morI_atypclwint:prcp3mow_lag9mo
-              + morI_atypclwint:prcp3mow_lag12mo
-              
-              ########  LAGGED  TEMP 
-              + morI_typclwint:tmin3mow_lag3mo
-              + morI_typclwint:tmin3mow_lag6mo
-              + morI_typclwint:tmin3mow_lag9mo
-              + morI_typclwint:tmin3mow_lag12mo
-              
-               + morI_atypclwint:tmin3mow_lag3mo
-               + morI_atypclwint:tmin3mow_lag6mo
-               + morI_atypclwint:tmin3mow_lag9mo
-               + morI_atypclwint:tmin3mow_lag12mo
-        
-               + morI_typclwint:tmax3mow_lag3mo
-               + morI_typclwint:tmax3mow_lag6mo
-               + morI_typclwint:tmax3mow_lag9mo
-               + morI_typclwint:tmax3mow_lag12mo
-              
-                + morI_atypclwint:tmax3mow_lag3mo
-                + morI_atypclwint:tmax3mow_lag6mo
-                + morI_atypclwint:tmax3mow_lag9mo
-                + morI_atypclwint:tmax3mow_lag12mo,
-              
-              rnd = list(camp=~1), data = winter, 
-              family = gaussian(link = "logit"),
-              lambda = lambda[j],
-              switch.NR = TRUE,
-              final.re = TRUE),
-    silent = TRUE)
-  
-  
-  # code to make it continue anyway if an error occurs
-  if(class(glm1w)!="try-error")
-  {
-    
-    #save BIC, AIC
-    BIC_vec[j]<-glm1w$bic
-    AIC_vec[j]<-glm1w$aic
-    
-    #save coefficient outputs
-    Coeff_ma<-cbind(Coeff_ma,glm1w$coefficients)
-    
-    #save error (deviance) values
-    y.hat<-predict(glm1w,winter)
-    Devianz_ma[j]<-sum(family$dev.resids(winter$bff.presence, y.hat,wt=rep(1,length(y.hat))))
-    
-  }
-}
-
-lambda[which.min(BIC_vec)]
-
-## [1]  3.59
-
-lambda[which.min(AIC_vec)]
-
-## [1] 3
-
-lambda[which.min(Devianz_ma)]
-final_lambda<-lambda[which.min(BIC_vec)] 
-summary(glm1w)
-
-
 
 #dummy vectors of model fit values for each lambda: BIC, AIC, prediction error
 BIC_vec <- rep(Inf, length(lambda))
@@ -184,18 +104,20 @@ AIC_vec <- rep(Inf, length(lambda))
 Devianz_ma<-NULL
 Coeff_ma<-NULL
 
-####testing 
+####tersring 
 j<-1
 for (j in 1:length(BIC_vec)){
   print(paste("Iteration ", j, sep=""))
   
-  glm1w <- try( 
-    glmmLasso(bff.presence ~
-                + morI_atypclwint:mean_prcp_3mo_w +  morI_atypclwint:mean_tmax_3mo_w   +  morI_atypclwint:mean_tmin_3mo_w
+  glm1w <- try( #i write out all  possible interaction effects... glmmLasso syntax doesn't allow for "*" notation
+    glmmLasso(bff.presence ~ morI_atypclwint:mean_prcp_3mo_w +  morI_atypclwint:mean_tmax_3mo_w   +  morI_atypclwint:mean_tmin_3mo_w
+              
               + morI_typclwint:mean_prcp_3mo_w +  morI_typclwint:mean_tmax_3mo_w   +  morI_typclwint:mean_tmin_3mo_w
               
-              ######  LAGGED  PRECIP 
+              ##########  LAGGED  PRECIP ANOMALIES
+              
               + morI_typclwint:prcp3mow_lag3mo
+              
               + morI_typclwint:prcp3mow_lag6mo
               + morI_typclwint:prcp3mow_lag9mo
               + morI_typclwint:prcp3mow_lag12mo
@@ -205,8 +127,7 @@ for (j in 1:length(BIC_vec)){
               + morI_atypclwint:prcp3mow_lag9mo
               + morI_atypclwint:prcp3mow_lag12mo
               
-              ########  LAGGED  TEMP 
-              + morI_typclwint:tmin3mow_lag3mo
+               + morI_typclwint:tmin3mow_lag3mo
               + morI_typclwint:tmin3mow_lag6mo
               + morI_typclwint:tmin3mow_lag9mo
               + morI_typclwint:tmin3mow_lag12mo
@@ -226,6 +147,7 @@ for (j in 1:length(BIC_vec)){
               + morI_atypclwint:tmax3mow_lag9mo
               + morI_atypclwint:tmax3mow_lag12mo,
               
+              
               rnd = list(camp=~1), data = winter, 
               family = gaussian(link = "logit"),
               lambda = lambda[j],
@@ -254,7 +176,7 @@ for (j in 1:length(BIC_vec)){
 
 lambda[which.min(BIC_vec)]
 
-## [1]  3.59
+
 
 lambda[which.min(AIC_vec)]
 
@@ -270,40 +192,40 @@ summary(glm1w)
 
 
 ##### real glmmLasso no lambaa optimization
-las4<- glmmLasso(bff.presence ~ morI_atypclwint:mean_prcp_3mo_w +  morI_atypclwint:mean_tmax_3mo_w   +  morI_atypclwint:mean_tmin_3mo_w
+las4<- glmmLasso(bff.presence ~ morI_atypclwint:mean_prcp_3mo_w +  morI_atypclwint:mean_tmax_3mo_w   #+  morI_atypclwint:mean_tmin_3mo_w
                  
-                 + morI_typclwint:mean_prcp_3mo_w +  morI_typclwint:mean_tmax_3mo_w   +  morI_typclwint:mean_tmin_3mo_w
+                 + morI_typclwint:mean_prcp_3mo_w +  morI_typclwint:mean_tmax_3mo_w  # +  morI_typclwint:mean_tmin_3mo_w
                  
                  ##########  LAGGED  PRECIP ANOMALIES
                  
                 #   + morI_typclwint:prcp3mow_lag3mo
                  
-                 + morI_typclwint:prcp3mow_lag6mo
+                # + morI_typclwint:prcp3mow_lag6mo
                  + morI_typclwint:prcp3mow_lag9mo
                  + morI_typclwint:prcp3mow_lag12mo
                  
                 #    + morI_atypclwint:prcp3mow_lag3mo
-                 + morI_atypclwint:prcp3mow_lag6mo
+                # + morI_atypclwint:prcp3mow_lag6mo
                  + morI_atypclwint:prcp3mow_lag9mo
                  + morI_atypclwint:prcp3mow_lag12mo
                  
                #     + morI_typclwint:tmin3mow_lag3mo
-                 + morI_typclwint:tmin3mow_lag6mo
+               # + morI_typclwint:tmin3mow_lag6mo
                  + morI_typclwint:tmin3mow_lag9mo
                  + morI_typclwint:tmin3mow_lag12mo
                  
                 #    + morI_atypclwint:tmin3mow_lag3mo
-                 + morI_atypclwint:tmin3mow_lag6mo
+               # + morI_atypclwint:tmin3mow_lag6mo
                  + morI_atypclwint:tmin3mow_lag9mo
                  + morI_atypclwint:tmin3mow_lag12mo
                  
                 #     + morI_typclwint:tmax3mow_lag3mo
-                 + morI_typclwint:tmax3mow_lag6mo
+               # + morI_typclwint:tmax3mow_lag6mo
                  + morI_typclwint:tmax3mow_lag9mo
                  + morI_typclwint:tmax3mow_lag12mo
                  
                 #      + morI_atypclwint:tmax3mow_lag3mo
-                 + morI_atypclwint:tmax3mow_lag6mo
+               #  + morI_atypclwint:tmax3mow_lag6mo
                  + morI_atypclwint:tmax3mow_lag9mo
                  + morI_atypclwint:tmax3mow_lag12mo,
                  
@@ -311,3 +233,54 @@ las4<- glmmLasso(bff.presence ~ morI_atypclwint:mean_prcp_3mo_w +  morI_atypclwi
                  rnd = list(camp=~1), data =winter, 
                  lambda =final_lambda, family = binomial(link="logit"), final.re=TRUE)
 summary(las4)
+
+print(las4, correlation = TRUE)
+
+### removing highly correlated variables 
+##############
+
+logme0 <- glmer(bff.presence ~ morI_atypclwint:mean_prcp_3mo_w  #+  morI_atypclwint:mean_tmax_3mo_w  
+                +  morI_atypclwint:mean_tmin_3mo_w
+                
+                + morI_typclwint:mean_prcp_3mo_w #+  morI_typclwint:mean_tmax_3mo_w   
+                +  morI_typclwint:mean_tmin_3mo_w
+                
+                ##########  LAGGED  PRECIP ANOMALIES
+
+                #+ morI_typclwint:prcp3mow_lag3mo
+              #+ morI_typclwint:prcp3mow_lag6mo
+                + morI_typclwint:prcp3mow_lag9mo
+                + morI_typclwint:prcp3mow_lag12mo
+                
+                # + morI_atypclwint:prcp3mow_lag3mo
+               # + morI_atypclwint:prcp3mow_lag6mo
+                + morI_atypclwint:prcp3mow_lag9mo
+                + morI_atypclwint:prcp3mow_lag12mo
+                
+                # + morI_typclwint:tmin3mow_lag3mo
+               # + morI_typclwint:tmin3mow_lag6mo
+                 + morI_typclwint:tmin3mow_lag9mo
+                + morI_typclwint:tmin3mow_lag12mo
+                
+                # + morI_atypclwint:tmin3mow_lag3mo
+               # + morI_atypclwint:tmin3mow_lag6mo
+                + morI_atypclwint:tmin3mow_lag9mo
+                + morI_atypclwint:tmin3mow_lag12mo
+                
+               #  + morI_typclwint:tmax3mow_lag3mo
+               # + morI_typclwint:tmax3mow_lag6mo
+                + morI_typclwint:tmax3mow_lag9mo
+                + morI_typclwint:tmax3mow_lag12mo
+                
+                # + morI_atypclwint:tmax3mow_lag3mo
+                # + morI_atypclwint:tmax3mow_lag6mo
+                + morI_atypclwint:tmax3mow_lag9mo
+                + morI_atypclwint:tmax3mow_lag12mo
+                
+                + (1 |camp),
+                data = winter, family = binomial,
+                control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e5)),
+                nAGQ = 10)
+summary(logme0)
+
+print(logme0, correlation = TRUE)
